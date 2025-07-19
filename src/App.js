@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 // Helper function to shuffle an array
 const shuffleArray = (array) => {
   const newArray = [...array]; // Create a shallow copy to avoid mutating original
+  // Corrected for loop syntax: condition should be a boolean expression
   for (let i = newArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]]; // Swap elements
@@ -774,7 +775,8 @@ const App = () => {
 
   return (
     <div className="font-sans antialiased">
-     
+      {/* Confetti CDN - Remains here as it's a JS library */}
+      <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
       <style>
         {`
         body {
