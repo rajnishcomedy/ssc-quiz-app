@@ -667,7 +667,7 @@ const App = () => {
           origin: { y: 0.6 }
         });
       }
-    }, [quizMode]); // Dependency array is fine here as it reacts to quizMode change
+    }, []); //  // Run once on mount, or change based on actual trigger you intend
 
 
     const getMotivatingMessage = () => {
