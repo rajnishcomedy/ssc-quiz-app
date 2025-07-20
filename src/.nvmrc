@@ -1,0 +1,1 @@
+This tells Netlify to use Node.js version 20 during the build process.
