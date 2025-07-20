@@ -776,8 +776,8 @@ const App = () => {
 
   return (
     <div className="font-sans antialiased">
-      {/* Confetti CDN - Remains here as it's a JS library */}
-      <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+      {/* Confetti CDN - This script should be in public/index.html instead of JSX */}
+      {/* <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script> */}
       <style>
         {`
         body {
