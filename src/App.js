@@ -129,9 +129,8 @@ const App = () => {
         parsedData.forEach(q => {
           if (q.subject) {
             subjects.add(q.subject);
-            if (!topicsBySubject[q.subject]) {
-              topicsBySubject[q.subject] = new Set();
-            }
+            // Ensure topicsBySubject[q.subject] is a Set before adding a topic
+            topicsBySubject[q.subject] = topicsBySubject[q.subject] || new Set(); // Fix applied here
             if (q.topic) {
               topicsBySubject[q.subject].add(q.topic);
             }
@@ -343,8 +342,8 @@ const App = () => {
   // Home Screen: Quiz Mode Selection
   const QuizModeSelection = () => {
     // Calculate total unique questions and subjects for motivational context
-    const totalQuestions = quizData.length;
-    const uniqueSubjects = new Set(quizData.map(q => q.subject)).size;
+    // Removed unused variable: const uniqueSubjects = new Set(quizData.map(q => q.subject)).size;
+    const totalQuestions = quizData.length; // Still need totalQuestions
     const subjectList = Array.from(new Set(quizData.map(q => q.subject))).join(', ');
 
 
@@ -659,6 +658,8 @@ const App = () => {
 
     // Confetti for topic quiz completion
     useEffect(() => {
+      // This effect should run only when quizMode changes to 'topic' and confetti is available
+      // It's already correctly set up to run once based on quizMode change
       if (quizMode === 'topic' && typeof window.confetti === 'function') {
         window.confetti({
           particleCount: 100,
@@ -666,7 +667,7 @@ const App = () => {
           origin: { y: 0.6 }
         });
       }
-    }, [quizMode]);
+    }, [quizMode]); // Dependency array is fine here as it reacts to quizMode change
 
 
     const getMotivatingMessage = () => {
