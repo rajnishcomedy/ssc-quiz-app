@@ -1,204 +1,456 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-// Import confetti library
-// Note: In a real-world project, you'd typically install this via npm/yarn and import.
-// For this environment, we'll load it via CDN in the HTML section.
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 
-// Helper function to shuffle an array
+// Note: This version uses browser localStorage for persistence and React.lazy for performance.
+
+/**
+ * Helper function to shuffle an array using the Fisher-Yates algorithm.
+ * @param {Array} array The array to shuffle.
+ * @returns {Array} A new array with the elements shuffled.
+ */
 const shuffleArray = (array) => {
-  const newArray = [...array]; // Create a shallow copy to avoid mutating original
-  // Corrected for loop syntax: condition should be a boolean expression
+  const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]]; // Swap elements
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
   return newArray;
 };
 
+// --- CONSTANTS ---
+const SUBJECT_ORDER = ['History', 'Geography', 'Polity', 'Economics', 'Science', 'English'];
+
+const HISTORY_TOPIC_ORDER = [
+    'Ancient History', 'Miscellaneous (Pre-Delhi Sultanate)', 'Medieval History', 'Miscellaneous',
+    'Modern India', 'British Acts and Policies', 'Expansion of British Rule', 'Governors and Viceroys',
+    'Socio Religious Reforms', 'Indian National Congress and Its Sessions', 'Partition of Bengal and Swadeshi Movements',
+    'Muslim League', 'Gandhian Era', 'The Revolutionaries', 'Struggle for Independence'
+];
+
+const GEOGRAPHY_TOPIC_ORDER = [
+    'The Universe and The Solar System', 'Longitudes and Latitudes', 'Continents and Oceans', 'Mountains',
+    'Volcano', 'Rocks', 'Soil', 'Climate', 'Atmosphere', 'World Drainage System', 'Vegetation',
+    'Biosphere Reserves', 'Population', 'World Geography and Map', 'Neighbouring Countries of India',
+    'Physiographic Division of India', 'Indian Drainage System', 'Minerals and Energy Resources in India',
+    'Agriculture', 'Industries', 'Transportation', 'Miscellaneous'
+];
+
+const POLITY_TOPIC_ORDER = [
+    'Sources of Indian Constitution', 'Constitution', 'Article, Schedule, Parts and List', 'Amendments',
+    'Fundamental Rights and Duties', 'Executive', 'President, Vice President and Prime Minister',
+    'Parliament', 'Judiciary', 'Government Bodies', 'Committee Reports', 'Polity of neighbouring countries',
+    'Miscellaneous'
+];
+
+const ECONOMICS_TOPIC_ORDER = [
+    'Basics of Economy', 'Concepts of Demand and Supply', 'Cost, Production, Consumption and Market',
+    'Indian Economy: Central Problems and Planning', 'National Income, Inflation, Budget, Taxation and GDP',
+    'Fiscal Policy and Monetary Policy', 'Money Banking and Financial Institutions', 'Banking and Finance',
+    'Stock, Debentures and Foreign Trade', 'Five-Year Plans', 'Government Schemes',
+    'Navratna / Maharatna / PSUs', 'International Organizations', 'Miscellaneous'
+];
+
+const SCIENCE_TOPIC_ORDER = ['Physics', 'Chemistry', 'Biology'];
+const ENGLISH_TOPIC_ORDER = ['Synonyms', 'Antonyms', 'One Word Substitution', 'Idioms'];
+
+const MIXED_QUIZ_QUESTION_COUNT = 25;
+const PASS_SCORE_MIXED_QUIZ = 18;
+const MAX_LEVELS = 50;
+const AUTO_ADVANCE_DELAY = 3000;
+const BOOKMARKS_STORAGE_KEY = 'quizAppBookmarks';
+
+
+// --- UI COMPONENTS (Moved outside of App for performance and memoization) ---
+
+const LoadingSpinner = () => (
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+);
+
+const ErrorDisplay = ({ message, onRetry }) => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-red-50 p-4 text-center">
+        <div className="bg-white p-10 rounded-xl shadow-2xl">
+            <h2 className="text-3xl font-bold text-red-600 mb-4">Oops! Something went wrong.</h2>
+            <p className="text-lg text-gray-700 mb-6">{message}</p>
+            <button onClick={onRetry} className="bg-red-500 text-white font-bold py-3 px-8 rounded-full hover:bg-red-600 transition-colors">
+                Try Again
+            </button>
+        </div>
+    </div>
+);
+
+
+const QuizModeSelection = React.memo(({ isLoading, setQuizMode, prepareQuizQuestions, setShowBookmarks, bookmarkedQuestions }) => (
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-400 to-purple-600 p-4 overflow-hidden">
+      <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
+      <div className="relative z-10 w-full max-w-3xl bg-white/70 backdrop-blur-xl p-8 sm:p-12 rounded-2xl shadow-2xl text-center border border-white/20">
+        <h1 className="text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mb-4">Welcome, SSC Crackers!</h1>
+        <p className="text-xl md:text-2xl text-gray-700 mb-12">Ready to test your knowledge? Choose your adventure.</p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button onClick={() => { setQuizMode('mixed'); prepareQuizQuestions('mixed'); }} disabled={isLoading} className="bg-blue-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-blue-700 transform hover:-translate-y-1 transition-all duration-200 disabled:opacity-50">
+            <span className="text-xl">🎮 Mixed Quiz</span>
+            <span className="block text-sm font-normal opacity-90">25 Random Questions</span>
+          </button>
+          <button onClick={() => setQuizMode('topic')} disabled={isLoading} className="bg-purple-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-purple-700 transform hover:-translate-y-1 transition-all duration-200 disabled:opacity-50">
+            <span className="text-xl">📚 Practice by Topic</span>
+            <span className="block text-sm font-normal opacity-90">Choose Your Focus</span>
+          </button>
+          <button onClick={() => setShowBookmarks(true)} disabled={isLoading || bookmarkedQuestions.length === 0} className="bg-gray-700 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-gray-800 transform hover:-translate-y-1 transition-all duration-200 disabled:opacity-50">
+            <span className="text-xl">🔖 My Bookmarks</span>
+            <span className="block text-sm font-normal opacity-90">{bookmarkedQuestions.length} Saved</span>
+          </button>
+        </div>
+      </div>
+    </div>
+));
+
+const SubjectTopicSelection = React.memo(({ availableSubjects, availableTopics, selectedSubject, setSelectedSubject, topicQuestionCount, setTopicQuestionCount, prepareQuizQuestions, resetQuiz }) => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <div className="w-full max-w-4xl bg-white p-8 rounded-xl shadow-2xl text-center">
+        <h2 className="text-3xl font-bold text-gray-800 mb-6">Choose Your Focus</h2>
+        {!selectedSubject ? (
+          <>
+            <h3 className="text-xl font-semibold text-gray-700 mb-4">📚 1. Select a Subject:</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {availableSubjects.map((subject, index) => {
+                const buttonColors = ['bg-sky-500 hover:bg-sky-600', 'bg-emerald-500 hover:bg-emerald-600', 'bg-amber-500 hover:bg-amber-600', 'bg-rose-500 hover:bg-rose-600', 'bg-violet-500 hover:bg-violet-600', 'bg-cyan-500 hover:bg-cyan-600'];
+                const colorClass = buttonColors[index % buttonColors.length];
+                const baseClasses = "text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all duration-200 transform hover:shadow-lg hover:-translate-y-0.5 active:scale-95";
+                return <button key={subject} onClick={() => setSelectedSubject(subject)} className={`${baseClasses} ${colorClass}`}>{subject}</button>;
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4">🔢 Select Number of Questions:</h3>
+                <div className="flex justify-center gap-2 flex-wrap">
+                    {[5, 10, 15, 20, 'all'].map(num => (
+                        <button key={num} onClick={() => setTopicQuestionCount(num)} className={`py-2 px-5 rounded-full font-semibold transition-colors ${topicQuestionCount === num ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{num === 'all' ? 'All' : num}</button>
+                    ))}
+                </div>
+            </div>
+            <div>
+                <h3 className="text-xl font-semibold text-gray-700 mb-4">🎯 Select a Topic in <span className="text-purple-600">{selectedSubject}</span>:</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {availableTopics[selectedSubject]?.map((topic, index) => {
+                    const buttonColors = ['bg-emerald-500 hover:bg-emerald-600', 'bg-sky-500 hover:bg-sky-600', 'bg-violet-500 hover:bg-violet-600', 'bg-rose-500 hover:bg-rose-600', 'bg-amber-500 hover:bg-amber-600'];
+                    const colorClass = buttonColors[index % buttonColors.length];
+                    const baseClasses = "text-white font-bold text-base py-3 px-4 rounded-lg shadow-md transition-all duration-200 transform hover:shadow-lg hover:-translate-y-0.5 active:scale-95";
+                    return <button key={topic} onClick={() => prepareQuizQuestions('topic', selectedSubject, topic)} className={`${baseClasses} ${colorClass}`}>{topic}</button>;
+                  })}
+                </div>
+            </div>
+            <button onClick={() => setSelectedSubject(null)} className="mt-8 bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-full hover:bg-gray-400 transition-colors">Back to Subjects</button>
+          </>
+        )}
+        <button onClick={resetQuiz} className="mt-4 block mx-auto text-blue-600 hover:underline">Back to Home</button>
+      </div>
+    </div>
+));
+
+const QuestionDisplay = React.memo(({ quizMode, level, countdown, currentQuestion, filteredQuizData, currentQuestionIndex, userAnswer, showFeedback, handleAnswer, handleNextQuestion, resetQuiz, toggleBookmark, bookmarkedQuestions, handleSkipQuestion, showSkipConfirmation, confirmSkip, cancelSkip }) => {
+    if (!currentQuestion) return null;
+    
+    const isBookmarked = bookmarkedQuestions.some(bq => bq.question === currentQuestion.question);
+    const isCorrect = userAnswer === currentQuestion.correct_answer;
+    const getTimerColorClass = (time) => time > 15 ? 'bg-green-500' : time > 5 ? 'bg-yellow-500' : 'bg-red-500';
+    const progressPercentage = ((currentQuestionIndex + 1) / filteredQuizData.length) * 100;
+
+    return (
+      <div className="flex flex-col items-center justify-start min-h-screen bg-gray-50 p-4 sm:p-6">
+        <div className="relative bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-4xl">
+          <div className="flex items-center justify-between mb-4 pb-4 border-b">
+            <button onClick={resetQuiz} className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-full hover:bg-gray-300 transition" aria-label="Return to home">🏠 Home</button>
+            {quizMode === 'mixed' && <span className="bg-purple-500 text-white text-md font-bold px-4 py-2 rounded-full">🎯 Level {level}</span>}
+            <div className={`flex items-center justify-center gap-2 px-4 py-2 rounded-full text-white font-bold text-lg ${getTimerColorClass(countdown)} transition-colors`}>⏱️ {countdown}s</div>
+            <button onClick={() => toggleBookmark(currentQuestion)} className={`p-2 rounded-full transition-colors ${isBookmarked ? 'bg-yellow-400 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`} aria-label="Bookmark question">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+            </button>
+          </div>
+          <div className="mb-6">
+            <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${progressPercentage}%` }}></div></div>
+            <p className="text-right text-sm text-gray-600 mt-1">{currentQuestionIndex + 1} / {filteredQuizData.length}</p>
+          </div>
+          
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-semibold text-gray-800 mb-6 min-h-[100px] animate-fade-in-up" style={{ animationDelay: '100ms' }}>{currentQuestion.question}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {currentQuestion.options.map((option, index) => (
+                <button key={index} onClick={() => !showFeedback && handleAnswer(option)} disabled={showFeedback} 
+                  className={`flex items-center py-3 px-5 rounded-lg text-left text-lg font-medium transition-all duration-200 disabled:cursor-not-allowed animate-fade-in-up ${showFeedback ? (option === currentQuestion.correct_answer ? 'bg-green-200 text-green-800 border-2 border-green-500' : (option === userAnswer ? 'bg-red-200 text-red-800 border-2 border-red-500' : 'bg-gray-100')) : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                  style={{ animationDelay: `${200 + index * 100}ms` }}
+                >
+                  <span className="font-bold mr-3">{['A', 'B', 'C', 'D'][index]})</span> {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {showFeedback && (
+            <div className="mt-6 p-5 rounded-lg bg-gray-50 border animate-fade-in">
+              <p className={`text-2xl font-semibold mb-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>{isCorrect ? 'Correct! 🎉' : "That's incorrect. �"}</p>
+              <p className="text-lg text-gray-800 mb-2">Correct Answer: <span className="font-bold text-green-700">{currentQuestion.correct_answer}</span></p>
+              <p className="text-md text-gray-700"><span className="font-semibold">Explanation:</span> {currentQuestion.explanation}</p>
+              <button onClick={handleNextQuestion} className="mt-4 bg-purple-600 text-white font-bold py-2 px-8 rounded-full hover:bg-purple-700">Next</button>
+            </div>
+          )}
+          {!showFeedback && <button onClick={handleSkipQuestion} className="absolute bottom-5 right-5 bg-yellow-400 text-gray-800 font-semibold py-2 px-4 rounded-full shadow-lg hover:bg-yellow-500">Skip</button>}
+          {showSkipConfirmation && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"><div className="bg-white p-8 rounded-lg shadow-2xl text-center"><h3 className="text-xl font-bold mb-4">Skip Question?</h3><p className="mb-6">Are you sure?</p><div className="flex justify-center gap-4"><button onClick={confirmSkip} className="bg-red-500 text-white font-bold py-2 px-6 rounded-full">Yes, Skip</button><button onClick={cancelSkip} className="bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-full">Cancel</button></div></div></div>
+          )}
+        </div>
+      </div>
+    );
+});
+
+const ResultsScreen = React.memo(({ quizMode, score, filteredQuizData, level, resetQuiz, bookmarkedQuestions, setShowBookmarks, handleLevelProgression, prepareQuizQuestions, selectedSubject, selectedTopic }) => {
+    const passedMixedQuiz = quizMode === 'mixed' && score >= PASS_SCORE_MIXED_QUIZ;
+    useEffect(() => {
+      if ((quizMode === 'topic' || (quizMode === 'mixed' && passedMixedQuiz)) && typeof window.confetti === 'function') {
+        window.confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      }
+    }, [passedMixedQuiz, quizMode]);
+    
+    const getMotivatingMessage = () => {
+      if (quizMode === 'mixed') {
+        return passedMixedQuiz ? "Fantastic job! You're a true quiz champion!" : "Every expert was once a beginner! Keep practicing.";
+      }
+      const percentage = (score / filteredQuizData.length) * 100;
+      if (percentage === 100) return "Perfect score! You've mastered this topic!";
+      if (percentage >= 70) return "Great effort! You're well on your way to mastery.";
+      return "Learning is a journey. A little more practice and you'll shine!";
+    };
+
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+        <div className="bg-white p-10 rounded-xl shadow-2xl text-center w-full max-w-2xl">
+          <h2 className="text-4xl font-extrabold text-gray-800 mb-4">Quiz Completed!</h2>
+          <p className="text-5xl font-bold text-blue-600 mb-6">{score} / {filteredQuizData.length}</p>
+          <p className="text-xl text-gray-600 mb-8">{getMotivatingMessage()}</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            {quizMode === 'mixed' && passedMixedQuiz && level < MAX_LEVELS && (
+              <button onClick={handleLevelProgression} className="bg-green-500 text-white font-bold py-3 px-6 rounded-full hover:bg-green-600 transition">
+                Proceed to Level {level + 1}
+              </button>
+            )}
+            {quizMode === 'mixed' && !passedMixedQuiz && (
+              <button onClick={() => prepareQuizQuestions('mixed')} className="bg-yellow-500 text-white font-bold py-3 px-6 rounded-full hover:bg-yellow-600 transition">
+                Retry Level {level}
+              </button>
+            )}
+            {quizMode === 'topic' && (
+              <button onClick={() => prepareQuizQuestions('topic', selectedSubject, selectedTopic)} className="bg-purple-500 text-white font-bold py-3 px-6 rounded-full hover:bg-purple-600 transition">
+                Try More
+              </button>
+            )}
+            <button onClick={resetQuiz} className="bg-blue-500 text-white font-bold py-3 px-6 rounded-full hover:bg-blue-600 transition">New Quiz</button>
+            {bookmarkedQuestions.length > 0 && (
+              <button onClick={() => setShowBookmarks(true)} className="bg-gray-700 text-white font-bold py-3 px-6 rounded-full hover:bg-gray-800 transition">
+                Review Bookmarks ({bookmarkedQuestions.length})
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+});
+
+const BookmarksViewer = React.memo(({ bookmarkedQuestions, setShowBookmarks, toggleBookmark }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-3xl h-full max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b">
+          <h3 className="text-2xl font-bold text-gray-800">My Bookmarks</h3>
+          <button onClick={() => setShowBookmarks(false)} className="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+        </div>
+        <div className="p-6 overflow-y-auto">
+          {bookmarkedQuestions.length > 0 ? bookmarkedQuestions.map((item, index) => (
+            <div key={index} className="mb-6 pb-6 border-b last:border-b-0">
+              <div className="flex justify-between items-start">
+                  <p className="text-lg font-semibold text-gray-800 mb-2 flex-1">{index + 1}. {item.question}</p>
+                  <button onClick={() => toggleBookmark(item)} className="ml-4 p-2 text-red-500 hover:text-red-700" aria-label="Remove bookmark">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+              </div>
+              <p className="text-md text-green-600 font-bold mb-2">Correct Answer: {item.correct_answer}</p>
+              <p className="text-md text-gray-600"><span className="font-semibold">Explanation:</span> {item.explanation}</p>
+            </div>
+          )) : <p className="text-center text-gray-500 py-8">You haven't bookmarked any questions yet.</p>}
+        </div>
+      </div>
+    </div>
+));
+
+// --- LAZY COMPONENTS ---
+const LazyQuestionDisplay = lazy(() => Promise.resolve({ default: QuestionDisplay }));
+const LazyResultsScreen = lazy(() => Promise.resolve({ default: ResultsScreen }));
+const LazyBookmarksViewer = lazy(() => Promise.resolve({ default: BookmarksViewer }));
+
+
 // Main App Component
 const App = () => {
-  const [quizData, setQuizData] = useState([]); // Stores all questions from CSV
-  const [filteredQuizData, setFilteredQuizData] = useState([]); // Questions for current quiz mode
+  const [quizData, setQuizData] = useState([]);
+  const [filteredQuizData, setFilteredQuizData] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
-  const [quizMode, setQuizMode] = useState(null); // 'mixed' or 'topic'
+  const [quizMode, setQuizMode] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [userAnswer, setUserAnswer] = useState(null);
-  const [questionHistory, setQuestionHistory] = useState(new Set()); // Tracks questions asked in current session
+  const [questionHistory, setQuestionHistory] = useState(new Set());
   const [availableSubjects, setAvailableSubjects] = useState([]);
-  const [availableTopics, setAvailableTopics] = useState({}); // {subject: [topic1, topic2]}
-  const [level, setLevel] = useState(1); // For mixed quiz progression
-  const [isLoading, setIsLoading] = useState(true); // New state to track loading
-  const [countdown, setCountdown] = useState(30); // State for real-time countdown
-  const [showSkipConfirmation, setShowSkipConfirmation] = useState(false); // New state for skip confirmation modal
-
+  const [availableTopics, setAvailableTopics] = useState({});
+  const [level, setLevel] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [countdown, setCountdown] = useState(30);
+  const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
+  const [topicQuestionCount, setTopicQuestionCount] = useState(10);
+  const [bookmarkedQuestions, setBookmarkedQuestions] = useState([]);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
   const timerRef = useRef(null);
-  const feedbackTimerRef = useRef(null); // New ref for auto-advance timer
-
-  // Constants for quiz limits
-  const MIXED_QUIZ_QUESTION_COUNT = 25;
-  const TOPIC_QUIZ_QUESTION_COUNT = 10;
-  const PASS_SCORE_MIXED_QUIZ = 18;
-  const MAX_LEVELS = 50; // Soft limit for levels
-  const AUTO_ADVANCE_DELAY = 3000; // 3 seconds delay for auto-advance after feedback
-
-  // Custom CSV parsing function to handle quoted fields correctly
-  const parseCSVRow = (row) => {
-      const result = [];
-      let inQuote = false;
-      let currentField = '';
-
-      for (let i = 0; i < row.length; i++) {
-          const char = row[i];
-          const nextChar = row[i + 1];
-
-          if (char === '"') {
-              if (inQuote && nextChar === '"') { // Handle escaped double quote ""
-                  currentField += '"';
-                  i++; // Skip the next quote
-              } else {
-                  inQuote = !inQuote;
-              }
-          } else if (char === ',' && !inQuote) {
-              result.push(currentField.trim());
-              currentField = '';
-          } else {
-              currentField += char;
-          }
-      }
-      result.push(currentField.trim()); // Push the last field
-
-      // Map the parsed fields to the correct structure based on CSV column order
-      // Question, Option1, Option2, Option3, Option4, CorrectAnswer, Explanation, Topic, Subject
-      if (result.length < 9) { // Ensure all 9 expected columns are present
-          console.warn("Skipping malformed row (not enough columns):", row);
-          return null;
-      }
-
-      const [
-          question,
-          option1,
-          option2,
-          option3,
-          option4,
-          correctAnswer,
-          explanation,
-          topic,
-          subject
-      ] = result;
-
-      const options = [option1, option2, option3, option4].filter(opt => opt);
-
-      // Basic validation for parsed data
-      if (!question || options.length !== 4 || !correctAnswer || !subject || !topic) {
-          console.warn("Skipping incomplete or invalid question data:", { question, options, correctAnswer, explanation, topic, subject });
-          return null;
-      }
-
-      // Shuffle options here before returning
-      const shuffledOptions = shuffleArray(options);
-
-      return {
-          question,
-          options: shuffledOptions, // Options are now shuffled
-          correct_answer: correctAnswer,
-          explanation,
-          subject,
-          topic
-      };
-  };
-
-  // Fetch and parse CSV data
+  const feedbackTimerRef = useRef(null);
+  
   useEffect(() => {
-    const fetchQuizData = async () => {
-      try {
-        const response = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vQWdBcdp3GM1m97dy0yt3zRFEU_Hw-bjdlp8Mc1ZX2B43j0liArk1gveWZUn0TOK59Ffh4OyXoY5NCY/pub?output=csv');
-        const text = await response.text();
-        const rows = text.split('\n').slice(1); // Skip header row
-
-        const parsedData = rows.map(row => parseCSVRow(row)).filter(item => item !== null); // Use the new parsing function
-
-        setQuizData(parsedData);
-
-        // Extract subjects and topics for selection
-        const subjects = new Set();
-        const topicsBySubject = {};
-        parsedData.forEach(q => {
-          if (q.subject) {
-            subjects.add(q.subject);
-            // Ensure topicsBySubject[q.subject] is a Set before adding a topic
-            topicsBySubject[q.subject] = topicsBySubject[q.subject] || new Set(); // Fix applied here
-            if (q.topic) {
-              topicsBySubject[q.subject].add(q.topic);
-            }
-          }
-        });
-        setAvailableSubjects(Array.from(subjects).sort());
-        const sortedTopicsBySubject = {};
-        for (const sub in topicsBySubject) {
-          sortedTopicsBySubject[sub] = Array.from(topicsBySubject[sub]).sort();
-        }
-        setAvailableTopics(sortedTopicsBySubject);
-
-      } catch (error) {
-        console.error("Error fetching or parsing quiz data:", error);
-      } finally {
-        setIsLoading(false); // Set loading to false after fetch attempt
+    try {
+      const savedBookmarks = localStorage.getItem(BOOKMARKS_STORAGE_KEY);
+      if (savedBookmarks) {
+        setBookmarkedQuestions(JSON.parse(savedBookmarks));
       }
-    };
-
-    fetchQuizData();
+    } catch (error) {
+      console.error("Error loading bookmarks from local storage:", error);
+      setBookmarkedQuestions([]);
+    }
   }, []);
 
-  // Function to select and shuffle questions for a new quiz
-  const prepareQuizQuestions = useCallback((mode, subject = null, topic = null) => {
-    // Ensure quizData is loaded before attempting to prepare questions
-    if (quizData.length === 0) {
-        console.warn("Quiz data not loaded yet. Cannot prepare questions.");
-        setFilteredQuizData([]); // Ensure no questions are displayed
-        setQuizStarted(false); // Go back to selection if no data
-        return;
+  const parseCSVRow = (row) => {
+    const result = [];
+    let inQuote = false;
+    let currentField = '';
+    for (let i = 0; i < row.length; i++) {
+        const char = row[i];
+        const nextChar = row[i + 1];
+        if (char === '"') {
+            if (inQuote && nextChar === '"') { currentField += '"'; i++; }
+            else { inQuote = !inQuote; }
+        } else if (char === ',' && !inQuote) {
+            result.push(currentField.trim());
+            currentField = '';
+        } else {
+            currentField += char;
+        }
     }
+    result.push(currentField.trim());
+    if (result.length < 9) return null;
+    const [question, o1, o2, o3, o4, correctAnswer, explanation, topic, subject] = result;
+    const options = [o1, o2, o3, o4].filter(opt => opt);
+    if (!question || options.length !== 4 || !correctAnswer || !subject || !topic) return null;
+    return { question, options: shuffleArray(options), correct_answer: correctAnswer, explanation, subject, topic };
+  };
 
+  const fetchQuizData = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const response = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vQWdBcdp3GM1m97dy0yt3zRFEU_Hw-bjdlp8Mc1ZX2B43j0liArk1gveWZUn0TOK59Ffh4OyXoY5NCY/pub?output=csv');
+      if (!response.ok) {
+          throw new Error(`Network response was not ok: ${response.statusText}`);
+      }
+      const text = await response.text();
+      const rows = text.split('\n').slice(1);
+      const parsedData = rows.map(row => parseCSVRow(row)).filter(item => item !== null);
+      setQuizData(parsedData);
+      const subjects = new Set();
+      const topicsBySubject = {};
+      parsedData.forEach(q => {
+        if (q.subject) {
+          subjects.add(q.subject);
+          if (!topicsBySubject[q.subject]) topicsBySubject[q.subject] = new Set();
+          if (q.topic) topicsBySubject[q.subject].add(q.topic);
+        }
+      });
+
+      const uniqueSubjects = Array.from(subjects);
+      uniqueSubjects.sort((a, b) => {
+        const indexA = SUBJECT_ORDER.indexOf(a);
+        const indexB = SUBJECT_ORDER.indexOf(b);
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        return a.localeCompare(b);
+      });
+      setAvailableSubjects(uniqueSubjects);
+      
+      const sortedTopicsBySubject = {};
+      for (const sub in topicsBySubject) {
+        const topics = Array.from(topicsBySubject[sub]);
+        let customTopicOrder = null;
+        if (sub === 'History') customTopicOrder = HISTORY_TOPIC_ORDER;
+        else if (sub === 'Geography') customTopicOrder = GEOGRAPHY_TOPIC_ORDER;
+        else if (sub === 'Polity') customTopicOrder = POLITY_TOPIC_ORDER;
+        else if (sub === 'Economics') customTopicOrder = ECONOMICS_TOPIC_ORDER;
+        else if (sub === 'Science') customTopicOrder = SCIENCE_TOPIC_ORDER;
+        else if (sub === 'English') customTopicOrder = ENGLISH_TOPIC_ORDER;
+        if (customTopicOrder) {
+          topics.sort((a, b) => {
+            const indexA = customTopicOrder.indexOf(a);
+            const indexB = customTopicOrder.indexOf(b);
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+          sortedTopicsBySubject[sub] = topics;
+        } else {
+          sortedTopicsBySubject[sub] = topics.sort();
+        }
+      }
+      setAvailableTopics(sortedTopicsBySubject);
+    } catch (error) {
+      console.error("Error fetching quiz data:", error);
+      setFetchError("Could not load quiz data. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchQuizData();
+  }, [fetchQuizData]);
+
+  const toggleBookmark = (questionObject) => {
+    const isAlreadyBookmarked = bookmarkedQuestions.some(bq => bq.question === questionObject.question);
+    let newBookmarks = isAlreadyBookmarked
+      ? bookmarkedQuestions.filter(bq => bq.question !== questionObject.question)
+      : [...bookmarkedQuestions, questionObject];
+    setBookmarkedQuestions(newBookmarks);
+    localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(newBookmarks));
+  };
+
+  const prepareQuizQuestions = useCallback((mode, subject = null, topic = null) => {
+    if (quizData.length === 0) return;
     let questionsPool = [];
     let count = 0;
-
     if (mode === 'mixed') {
-      questionsPool = quizData;
+      questionsPool = quizData.filter(q => q.subject !== 'English');
       count = MIXED_QUIZ_QUESTION_COUNT;
     } else if (mode === 'topic' && subject && topic) {
+      setSelectedTopic(topic); // Keep track of the selected topic
       questionsPool = quizData.filter(q => q.subject === subject && q.topic === topic);
-      count = TOPIC_QUIZ_QUESTION_COUNT;
+      count = topicQuestionCount === 'all' ? questionsPool.length : topicQuestionCount;
     }
-
-    // Filter out questions already asked in this session
     let availableQuestions = questionsPool.filter(q => !questionHistory.has(q.question));
-
-    // If not enough unique questions are available for the current 'count',
-    // and we have a history (meaning we've exhausted the pool), reset history.
     if (availableQuestions.length < count && questionHistory.size > 0) {
-        console.warn(`[Analytics] Question history reset for ${mode} quiz. Previous unique pool exhausted.`);
-        setQuestionHistory(new Set()); // Clear history
-        availableQuestions = questionsPool; // All questions are now available again
-    } else if (availableQuestions.length === 0 && questionsPool.length > 0) {
-        console.warn(`[Analytics] No unique questions left for ${mode} quiz. Resetting history to reuse questions.`);
-        setQuestionHistory(new Set());
-        availableQuestions = questionsPool;
+      setQuestionHistory(new Set());
+      availableQuestions = questionsPool;
     }
-
-
-    // Shuffle all available questions and pick the required count
-    const questionsToUse = availableQuestions
-        .sort(() => Math.random() - 0.5)
-        .slice(0, count);
-
-    // Add selected questions to history
-    questionsToUse.forEach(q => questionHistory.add(q.question));
-    setQuestionHistory(new Set(questionHistory)); // Update state to trigger re-render if needed
-
+    const questionsToUse = shuffleArray(availableQuestions).slice(0, count);
+    const newHistory = new Set(questionHistory);
+    questionsToUse.forEach(q => newHistory.add(q.question));
+    setQuestionHistory(newHistory);
     setFilteredQuizData(questionsToUse);
     setCurrentQuestionIndex(0);
     setScore(0);
@@ -206,25 +458,18 @@ const App = () => {
     setShowFeedback(false);
     setUserAnswer(null);
     setQuizStarted(true);
-    setCountdown(30); // Reset countdown for the first question
-
-    // If no questions were found at all after all attempts
+    setCountdown(30);
     if (questionsToUse.length === 0) {
-        console.error("No questions could be prepared for the quiz. Check CSV data or filter criteria.");
-        setQuizStarted(false); // Go back to selection if no questions
-        setQuizMode(null); // Return to home screen
+      setQuizStarted(false);
+      setQuizMode(null);
     }
+  }, [quizData, questionHistory, topicQuestionCount]);
 
-  }, [quizData, questionHistory]);
-
-
-  // Proceed to next question - Defined FIRST
   const handleNextQuestion = useCallback(() => {
-    clearTimeout(feedbackTimerRef.current); // Clear any pending auto-advance timer
+    clearTimeout(feedbackTimerRef.current);
     setShowFeedback(false);
     setUserAnswer(null);
-    setCountdown(30); // Reset countdown for next question
-
+    setCountdown(30);
     if (currentQuestionIndex < filteredQuizData.length - 1) {
       setCurrentQuestionIndex(prevIndex => prevIndex + 1);
     } else {
@@ -233,70 +478,39 @@ const App = () => {
     }
   }, [currentQuestionIndex, filteredQuizData.length]);
 
-  // Handle user answering a question or time expiring - Defined SECOND (depends on handleNextQuestion)
   const handleAnswer = useCallback((selectedOption) => {
-    clearInterval(timerRef.current); // Stop the main timer
+    clearInterval(timerRef.current);
     setUserAnswer(selectedOption);
     setShowFeedback(true);
-
-    const currentQuestion = filteredQuizData[currentQuestionIndex];
-    if (selectedOption === currentQuestion.correct_answer) {
+    if (selectedOption === filteredQuizData[currentQuestionIndex]?.correct_answer) {
       setScore(prevScore => prevScore + 1);
     }
+    feedbackTimerRef.current = setTimeout(handleNextQuestion, AUTO_ADVANCE_DELAY);
+  }, [filteredQuizData, currentQuestionIndex, handleNextQuestion]);
 
-    // Auto-advance after a delay (whether answered or time ran out)
-    feedbackTimerRef.current = setTimeout(() => {
-      handleNextQuestion();
-    }, AUTO_ADVANCE_DELAY);
-  }, [filteredQuizData, currentQuestionIndex, handleNextQuestion]); // handleNextQuestion is a dependency
-
-  // Store handleAnswer in a ref to avoid dependency issues in useEffect
   const handleAnswerRef = useRef(handleAnswer);
-  useEffect(() => {
-      handleAnswerRef.current = handleAnswer; // Keep the ref updated with the latest handleAnswer
-  }, [handleAnswer]); // Update ref when handleAnswer changes
+  useEffect(() => { handleAnswerRef.current = handleAnswer; }, [handleAnswer]);
 
-
-  // Timer logic - Defined THIRD (depends on handleAnswerRef)
   useEffect(() => {
-    if (quizStarted && !quizCompleted && filteredQuizData.length > 0 && !showFeedback) {
+    if (quizStarted && !quizCompleted && !showFeedback && filteredQuizData.length > 0) {
       timerRef.current = setInterval(() => {
         setCountdown(prevCount => {
-          if (prevCount <= 0) {
+          if (prevCount <= 1) {
             clearInterval(timerRef.current);
-            handleAnswerRef.current(null); // Use the ref here
+            handleAnswerRef.current(null);
             return 0;
           }
           return prevCount - 1;
         });
       }, 1000);
     }
+    return () => { clearInterval(timerRef.current); clearTimeout(feedbackTimerRef.current); };
+  }, [quizStarted, quizCompleted, showFeedback, filteredQuizData.length]);
 
-    // Cleanup function for timers
-    return () => {
-      clearInterval(timerRef.current);
-      clearTimeout(feedbackTimerRef.current);
-    };
-  }, [quizStarted, quizCompleted, filteredQuizData, showFeedback]); // Removed handleAnswer from dependencies
+  const handleSkipQuestion = () => setShowSkipConfirmation(true);
+  const confirmSkip = () => { setShowSkipConfirmation(false); handleNextQuestion(); };
+  const cancelSkip = () => setShowSkipConfirmation(false);
 
-
-  // Handle user initiating skip question
-  const handleSkipQuestion = () => {
-    setShowSkipConfirmation(true); // Show custom confirmation modal
-  };
-
-  // Confirm skip from modal
-  const confirmSkip = () => {
-    setShowSkipConfirmation(false);
-    handleNextQuestion(); // Proceed to next question
-  };
-
-  // Cancel skip from modal
-  const cancelSkip = () => {
-    setShowSkipConfirmation(false);
-  };
-
-  // Reset quiz to home screen
   const resetQuiz = () => {
     setQuizMode(null);
     setSelectedSubject(null);
@@ -305,492 +519,98 @@ const App = () => {
     setQuizCompleted(false);
     setScore(0);
     setCurrentQuestionIndex(0);
-    setQuestionHistory(new Set()); // Clear history for a truly new session
+    setQuestionHistory(new Set());
     setLevel(1);
     clearInterval(timerRef.current);
-    clearTimeout(feedbackTimerRef.current); // Clear any pending auto-advance timer
-    setCountdown(30); // Reset countdown
-    setShowSkipConfirmation(false); // Hide modal if visible
+    clearTimeout(feedbackTimerRef.current);
+    setCountdown(30);
+    setShowSkipConfirmation(false);
   };
 
-  // Handle mixed quiz level progression
   const handleLevelProgression = () => {
     if (score >= PASS_SCORE_MIXED_QUIZ) {
+      if (typeof window.confetti === 'function') window.confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
       if (level < MAX_LEVELS) {
         setLevel(prevLevel => prevLevel + 1);
-        prepareQuizQuestions('mixed'); // Start new set of 25 questions
-        // Trigger confetti on level clear
-        if (typeof window.confetti === 'function') {
-          window.confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 }
-          });
-        }
+        prepareQuizQuestions('mixed');
       } else {
-        // Max levels reached, maybe a special message
-        setQuizCompleted(true); // Still show completion, but with max level message
+        setQuizCompleted(true);
       }
-    } else {
-      // Failed to pass, give options
-      // This state will be handled in the ResultsScreen component
     }
   };
 
-  // Components for different views
-
-  // Home Screen: Quiz Mode Selection
-  const QuizModeSelection = () => {
-    // Calculate total unique questions and subjects for motivational context
-    // Removed unused variable: const uniqueSubjects = new Set(quizData.map(q => q.subject)).size;
-    const totalQuestions = quizData.length; // Still need totalQuestions
-    const subjectList = Array.from(new Set(quizData.map(q => q.subject))).join(', ');
-
-
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 to-white p-4 relative overflow-hidden">
-        {/* Animated Gradient Background */}
-        <div className="absolute inset-0 animate-gradient-move bg-gradient-to-br from-blue-100 to-white"></div>
-
-        <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-screen-lg px-4 py-8">
-          <h1 className="text-6xl sm:text-7xl font-extrabold text-gray-900 mb-4 text-center drop-shadow-lg animate-fade-in-slide-up" style={{ animationDelay: '0.2s' }}>
-            Welcome, SSC Crackers!
-          </h1>
-          <p className="text-xl sm:text-2xl text-gray-700 mb-2 text-center max-w-2xl animate-fade-in-slide-up" style={{ animationDelay: '0.4s' }}>
-            Ready to test your knowledge? Choose your adventure!
-          </p>
-          <p className="text-lg text-gray-600 mb-8 text-center max-w-2xl animate-fade-in-slide-up" style={{ animationDelay: '0.6s' }}>
-            Daily practice keeps your edge sharp.
-          </p>
-          {totalQuestions > 0 && (
-            <p className="text-md text-gray-500 mb-12 text-center max-w-2xl animate-fade-in-slide-up" style={{ animationDelay: '0.7s' }}>
-              Over {totalQuestions}+ questions from {subjectList}.
-            </p>
-          )}
-
-
-          <div className="flex flex-col sm:flex-row gap-6 w-full justify-center mt-8 mb-8">
-            <button
-              onClick={() => {
-                setQuizMode('mixed');
-                prepareQuizQuestions('mixed');
-              }}
-              disabled={isLoading}
-              className={`
-                flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl w-full sm:w-1/2 lg:w-1/3
-                ${isLoading ? 'opacity-50 cursor-not-allowed' : 'animate-fade-in-slide-up'}
-              `}
-              style={{ animationDelay: '0.8s' }}
-              aria-label="Start Mixed Quiz with 25 Questions"
-            >
-              <span className="text-2xl">🎮</span> Mixed Quiz (25 Questions)
-              <span className="block text-sm font-normal opacity-80 mt-1">Random from all subjects</span>
-            </button>
-            <button
-              onClick={() => setQuizMode('topic')}
-              disabled={isLoading}
-              className={`
-                flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl w-full sm:w-1/2 lg:w-1/3
-                ${isLoading ? 'opacity-50 cursor-not-allowed' : 'animate-fade-in-slide-up'}
-              `}
-              style={{ animationDelay: '1s' }}
-              aria-label="Practice Quiz by Subject or Topic"
-            >
-              <span className="text-2xl">📚</span> Practice by Subject/Topic
-              <span className="block text-sm font-normal opacity-80 mt-1">Choose your focus area</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Subject/Topic Selection Screen
-  const SubjectTopicSelection = () => (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-600 to-pink-500 p-4 relative overflow-hidden">
-      {/* Animated Gradient Background */}
-      <div className="absolute inset-0 animate-gradient-move bg-gradient-to-br from-purple-600 to-pink-500"></div>
-
-      <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-screen-lg px-4 py-8">
-        <h2 className="sm:text-4xl text-3xl font-extrabold text-white mb-8 text-center drop-shadow-lg">
-          Choose Your Focus!
-        </h2>
-        {isLoading ? (
-          <div className="text-white text-2xl">Loading subjects and topics...</div>
-        ) : (
-          <>
-            {!selectedSubject ? (
-              <div className="w-full max-w-5xl bg-white p-8 rounded-xl shadow-2xl mt-8 mb-8">
-                <h3 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Select a Subject:</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {availableSubjects.map(subject => (
-                    <button
-                      key={subject}
-                      onClick={() => setSelectedSubject(subject)}
-                      className="bg-blue-500 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-blue-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                    >
-                      {subject}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={resetQuiz}
-                  className="mt-8 bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-full hover:bg-gray-400 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                >
-                  Back to Home
-                </button>
-              </div>
-            ) : (
-              <div className="w-full max-w-5xl bg-white p-8 rounded-xl shadow-2xl mt-8 mb-8">
-                <h3 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
-                  Topics in <span className="text-purple-600">{selectedSubject}</span>:
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {availableTopics[selectedSubject]?.map(topic => (
-                    <button
-                      key={topic}
-                      onClick={() => {
-                        setSelectedTopic(topic);
-                        prepareQuizQuestions('topic', selectedSubject, topic);
-                      }}
-                      className="bg-green-500 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                    >
-                      {topic}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex justify-between w-full mt-8">
-                  <button
-                    onClick={() => setSelectedSubject(null)}
-                    className="bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-full hover:bg-gray-400 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                  >
-                    Back to Subjects
-                  </button>
-                  <button
-                    onClick={resetQuiz}
-                    className="bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-full hover:bg-gray-400 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                  >
-                    Back to Home
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-
-  // Quiz Question Display
-  const QuestionDisplay = () => {
+  const renderContent = () => {
     if (isLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-          <p className="text-xl text-gray-700">Loading questions...</p>
-        </div>
-      );
+      return <LoadingSpinner />;
     }
-
-    if (!filteredQuizData.length) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-          <p className="text-xl text-gray-700">No questions available for this selection. Please try another quiz mode or topic.</p>
-          <button
-            onClick={resetQuiz}
-            className="mt-8 bg-blue-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-blue-600 transition duration-300"
-          >
-            Start New Quiz
-          </button>
-        </div>
-      );
+    if (fetchError) {
+        return <ErrorDisplay message={fetchError} onRetry={fetchQuizData} />;
     }
-
-    const currentQuestion = filteredQuizData[currentQuestionIndex];
-    const isCorrect = userAnswer === currentQuestion.correct_answer;
-
-    // Determine timer color
-    const getTimerColorClass = (time) => {
-      if (time > 20) return 'bg-green-500';
-      if (time > 10) return 'bg-orange-500';
-      return 'bg-red-500';
-    };
-
-    const alphabetLabels = ['A', 'B', 'C', 'D'];
-    const progressPercentage = ((currentQuestionIndex + 1) / filteredQuizData.length) * 100;
-
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 to-white p-4 relative overflow-hidden">
-        {/* Animated Gradient Background */}
-        <div className="absolute inset-0 animate-gradient-move bg-gradient-to-br from-blue-100 to-white"></div>
-
-        <div className="relative z-10 bg-white p-8 rounded-xl shadow-2xl w-full max-w-5xl mt-8 mb-8"> {/* Increased max-w */}
-          {/* Top Navigation Bar */}
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 shadow-sm">
-            {/* Home Button (Pill-shaped) */}
-            <button
-              onClick={resetQuiz}
-              className="bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-full shadow-md hover:bg-gray-400 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg min-w-[80px] min-h-[44px]"
-              aria-label="Return to home screen"
-            >
-              🏠 Home
-            </button>
-
-            {/* Level Display (Pill-shaped, Centered) */}
-            {quizMode === 'mixed' && (
-              <span className="bg-purple-500 text-white text-md font-bold px-4 py-2 rounded-full shadow-md">
-                🎯 Level {level}
-              </span>
-            )}
-
-            {/* Timer (Pill-shaped) */}
-            <div className={`flex items-center justify-center gap-1 px-4 py-2 rounded-full shadow-md text-white font-bold text-lg ${getTimerColorClass(countdown)} transition-colors duration-300 ease-in-out min-w-[80px] min-h-[44px]`}>
-              ⏱️ {countdown < 0 ? 0 : countdown}s
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mb-4">
-            <div
-              className="bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out animate-progress-pulse"
-              style={{ width: `${progressPercentage}%` }}
-              role="progressbar"
-              aria-valuenow={Math.round(progressPercentage)}
-              aria-valuemin="0"
-              aria-valuemax="100"
-            ></div>
-            <p className="text-right text-sm text-gray-600 mt-1">
-              {Math.round(progressPercentage)}% Completed ({currentQuestionIndex + 1}/{filteredQuizData.length})
-            </p>
-          </div>
-
-          <h2 className="text-3xl sm:text-4xl font-semibold text-gray-900 mb-8 leading-relaxed max-w-prose mx-auto pt-4 max-h-[60vh] overflow-y-auto" style={{ lineHeight: '1.5' }}>
-            {currentQuestion.question}
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {currentQuestion.options.map((option, index) => (
-              <button
-                key={index}
-                onClick={() => !showFeedback && handleAnswer(option)}
-                className={`
-                  flex items-center py-4 px-6 rounded-lg shadow-md text-left text-lg font-medium transition-transform duration-150 ease-in-out transform min-h-[44px]
-                  ${showFeedback
-                    ? (option === currentQuestion.correct_answer
-                      ? 'bg-green-200 text-green-800 border-2 border-green-500'
-                      : (option === userAnswer
-                        ? 'bg-red-200 text-red-800 border-2 border-red-500'
-                        : 'bg-gray-100 text-gray-700'))
-                    : (userAnswer === option // Highlight selected option before full feedback
-                        ? 'bg-blue-200 text-blue-800'
-                        : 'bg-blue-100 text-blue-800 hover:bg-blue-200 hover:shadow-lg')
-                  }
-                  ${showFeedback && 'cursor-not-allowed'}
-                  active:scale-98
-                `}
-                disabled={showFeedback}
-              >
-                <span className="font-bold mr-3 text-xl">{alphabetLabels[index]})</span> {option}
-              </button>
-            ))}
-          </div>
-
-          {showFeedback && (
-            <div className="mt-8 p-6 rounded-lg shadow-inner bg-gray-50 border border-gray-200">
-              <p className={`text-2xl font-semibold mb-3 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                {isCorrect ? 'Correct! 🎉 Great job!' : 'Oops! That\'s incorrect. 😔 Almost there, keep going!'}
-              </p>
-              <p className="text-lg text-gray-800 mb-2">
-                The correct answer was: <span className="font-semibold text-green-700">{currentQuestion.correct_answer}</span>
-              </p>
-              <p className="text-lg text-gray-700">
-                <span className="font-semibold">Explanation:</span> {currentQuestion.explanation}
-              </p>
-              <button
-                onClick={handleNextQuestion}
-                className="mt-6 bg-purple-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-purple-700 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl"
-              >
-                Next Question
-              </button>
-            </div>
-          )}
-          {/* Skip Button (Floating Action Button style) */}
-          {!showFeedback && (
-            <button
-              onClick={handleSkipQuestion}
-              className="absolute bottom-4 right-4 bg-yellow-400 text-gray-800 font-semibold py-3 px-6 rounded-full shadow-lg hover:bg-yellow-500 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-              style={{ zIndex: 20 }} // Ensure it floats above other content
-            >
-              Skip Question
-            </button>
-          )}
-
-          {/* Custom Skip Confirmation Modal */}
-          {showSkipConfirmation && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white p-8 rounded-lg shadow-2xl text-center max-w-sm w-full">
-                <h3 className="text-2xl font-bold text-gray-900 mb-6">Skip Question?</h3>
-                <p className="text-lg text-gray-700 mb-8">Are you sure you want to skip this question?</p>
-                <div className="flex justify-center gap-4">
-                  <button
-                    onClick={confirmSkip}
-                    className="bg-red-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-red-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                  >
-                    Yes, Skip
-                  </button>
-                  <button
-                    onClick={cancelSkip}
-                    className="bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-full shadow-lg hover:bg-gray-400 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-lg"
-                  >
-                    No, Don't Skip
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    if (quizCompleted) {
+        return <Suspense fallback={<LoadingSpinner />}><LazyResultsScreen 
+            quizMode={quizMode}
+            score={score}
+            filteredQuizData={filteredQuizData}
+            level={level}
+            resetQuiz={resetQuiz}
+            bookmarkedQuestions={bookmarkedQuestions}
+            setShowBookmarks={setShowBookmarks}
+            handleLevelProgression={handleLevelProgression}
+            prepareQuizQuestions={prepareQuizQuestions}
+            selectedSubject={selectedSubject}
+            selectedTopic={selectedTopic}
+        /></Suspense>;
+    }
+    if (quizStarted) {
+        return <Suspense fallback={<LoadingSpinner />}><LazyQuestionDisplay 
+            key={currentQuestionIndex}
+            quizMode={quizMode}
+            level={level}
+            countdown={countdown}
+            currentQuestion={filteredQuizData[currentQuestionIndex]}
+            filteredQuizData={filteredQuizData}
+            currentQuestionIndex={currentQuestionIndex}
+            userAnswer={userAnswer}
+            showFeedback={showFeedback}
+            handleAnswer={handleAnswer}
+            handleNextQuestion={handleNextQuestion}
+            resetQuiz={resetQuiz}
+            toggleBookmark={toggleBookmark}
+            bookmarkedQuestions={bookmarkedQuestions}
+            handleSkipQuestion={handleSkipQuestion}
+            showSkipConfirmation={showSkipConfirmation}
+            confirmSkip={confirmSkip}
+            cancelSkip={cancelSkip}
+        /></Suspense>;
+    }
+    if (quizMode === 'topic') {
+        return <SubjectTopicSelection 
+            availableSubjects={availableSubjects}
+            availableTopics={availableTopics}
+            selectedSubject={selectedSubject}
+            setSelectedSubject={setSelectedSubject}
+            topicQuestionCount={topicQuestionCount}
+            setTopicQuestionCount={setTopicQuestionCount}
+            setSelectedTopic={setSelectedTopic}
+            prepareQuizQuestions={prepareQuizQuestions}
+            resetQuiz={resetQuiz}
+        />;
+    }
+    return <QuizModeSelection 
+        isLoading={isLoading}
+        setQuizMode={setQuizMode}
+        prepareQuizQuestions={prepareQuizQuestions}
+        setShowBookmarks={setShowBookmarks}
+        bookmarkedQuestions={bookmarkedQuestions}
+    />;
   };
-
-  // Quiz Results Screen
-  const ResultsScreen = () => {
-    const passedMixedQuiz = quizMode === 'mixed' && score >= PASS_SCORE_MIXED_QUIZ;
-
-    // Confetti for topic quiz completion
-    useEffect(() => {
-      // This effect should run only when quizMode changes to 'topic' and confetti is available
-      // It's already correctly set up to run once based on quizMode change
-      if (quizMode === 'topic' && typeof window.confetti === 'function') {
-        window.confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      }
-    }, []); //  // Run once on mount, or change based on actual trigger you intend
-
-
-    const getMotivatingMessage = () => {
-      if (quizMode === 'mixed') {
-        if (passedMixedQuiz) {
-          return "Fantastic job! You're a true quiz champion!";
-        } else {
-          return "Don't worry, every expert was once a beginner! Keep practicing, you've got this!";
-        }
-      } else { // Topic-wise quiz
-        if (score === TOPIC_QUIZ_QUESTION_COUNT) {
-          return "Absolutely brilliant! You've mastered this topic!";
-        } else if (score >= TOPIC_QUIZ_QUESTION_COUNT / 2) {
-          return "Great effort! You're well on your way to becoming a master of this topic!";
-        } else {
-          return "Learning is a journey, not a race! A little more practice and you'll shine!";
-        }
-      }
-    };
-
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-700 p-4 relative overflow-hidden">
-        {/* Animated Gradient Background */}
-        <div className="absolute inset-0 animate-gradient-move bg-gradient-to-br from-indigo-500 to-purple-700"></div>
-
-        <div className="relative z-10 bg-white p-10 rounded-xl shadow-2xl text-center w-full max-w-5xl mt-8 mb-8"> {/* Increased max-w */}
-          <h2 className="text-5xl font-extrabold text-gray-900 mb-6 drop-shadow-lg">
-            Quiz Completed!
-          </h2>
-          <p className="text-4xl font-bold text-blue-600 mb-8">
-            Your Score: {score} / {filteredQuizData.length}
-          </p>
-
-          {quizMode === 'mixed' && (
-            <p className="text-2xl text-gray-700 mb-4">
-              Level {level} Result: {passedMixedQuiz ? 'Passed!' : 'Did not pass.'}
-            </p>
-          )}
-
-          <p className="text-2xl text-gray-800 mb-10 leading-relaxed">
-            {getMotivatingMessage()}
-          </p>
-
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
-            {quizMode === 'mixed' && !passedMixedQuiz && (
-              <button
-                onClick={() => {
-                  prepareQuizQuestions('mixed'); // Retry current level
-                }}
-                className="bg-red-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-red-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl"
-              >
-                Retry Level {level}
-              </button>
-            )}
-            {quizMode === 'mixed' && passedMixedQuiz && level < MAX_LEVELS && (
-              <button
-                onClick={handleLevelProgression}
-                className="bg-green-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-green-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl"
-              >
-                Proceed to Level {level + 1}
-              </button>
-            )}
-            {quizMode === 'topic' && (
-              <button
-                onClick={() => {
-                  // Reset score and current index, then prepare new questions for the same topic
-                  prepareQuizQuestions('topic', selectedSubject, selectedTopic);
-                }}
-                className="bg-purple-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-purple-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl"
-              >
-                Try 10 More Questions
-              </button>
-            )}
-            <button
-              onClick={resetQuiz}
-              className="bg-blue-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-blue-600 transform hover:scale-105 active:scale-95 transition-transform duration-150 ease-in-out text-xl"
-            >
-              Start New Quiz
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Render logic based on quiz state
-  let content;
-  if (isLoading) {
-    content = (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-400 to-purple-600 p-4">
-        <h1 className="text-5xl font-extrabold text-white mb-10 text-center drop-shadow-lg animate-pulse">
-          Loading Quiz Data...
-        </h1>
-        <p className="text-2xl text-white">Please wait a moment.</p>
-      </div>
-    );
-  } else if (!quizStarted && !quizMode) {
-    content = <QuizModeSelection />;
-  } else if (!quizStarted && quizMode === 'topic' && (!selectedSubject || !selectedTopic)) {
-    content = <SubjectTopicSelection />;
-  } else if (quizStarted && !quizCompleted) {
-    content = <QuestionDisplay />;
-  } else if (quizCompleted) {
-    content = <ResultsScreen />;
-  }
 
   return (
-    <div className="font-sans antialiased">
-      {/* Confetti CDN - This script should be in public/index.html instead of JSX */}
-      {/* <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script> */}
-      <style>
-        {`
-        body {
-          font-family: 'Inter', sans-serif;
-        }
-
-        /* Custom text shadow for readability */
-        .drop-shadow-lg {
-          text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        /* Keyframes for fade-in and slide-up animation */
-        @keyframes fadeInSlideUp {
+    <div className="font-sans antialiased text-gray-800">
+      <style>{`
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        @keyframes fade-in-up {
           from {
             opacity: 0;
             transform: translateY(20px);
@@ -800,48 +620,19 @@ const App = () => {
             transform: translateY(0);
           }
         }
-
-        .animate-fade-in-slide-up {
-          animation: fadeInSlideUp 0.7s ease-out forwards;
-          opacity: 0; /* Start invisible */
+        .animate-fade-in-up {
+          animation: fade-in-up 0.5s ease-out forwards;
+          opacity: 0;
         }
-
-        /* Keyframes for subtle gradient background movement */
-        @keyframes gradientMove {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        .bg-grid-pattern {
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 2rem 2rem;
         }
-
-        .animate-gradient-move {
-          background-size: 200% 200%;
-          animation: gradientMove 15s ease infinite;
-        }
-
-        /* Keyframes for subtle pulse animation for timer */
-        @keyframes pulseSubtle {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.03); }
-          100% { transform: scale(1); }
-        }
-
-        .animate-pulse-subtle {
-          animation: pulseSubtle 2s infinite ease-in-out;
-        }
-
-        /* Keyframes for progress bar pulse */
-        @keyframes progressPulse {
-          0% { box-shadow: 0 0 0 rgba(59, 130, 246, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-          100% { box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
-        }
-
-        .animate-progress-pulse {
-          animation: progressPulse 1.5s infinite;
-        }
-        `}
-      </style>
-      {content}
+      `}</style>
+      <Suspense fallback={<LoadingSpinner />}>
+        {renderContent()}
+        {showBookmarks && <LazyBookmarksViewer bookmarkedQuestions={bookmarkedQuestions} setShowBookmarks={setShowBookmarks} toggleBookmark={toggleBookmark} />}
+      </Suspense>
     </div>
   );
 };
