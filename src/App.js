@@ -81,23 +81,56 @@ const ErrorDisplay = ({ message, onRetry }) => (
 
 
 const QuizModeSelection = React.memo(({ isLoading, setQuizMode, prepareQuizQuestions, setShowBookmarks, bookmarkedQuestions }) => (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-400 to-purple-600 p-4 overflow-hidden">
-      <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
-      <div className="relative z-10 w-full max-w-3xl bg-white/70 backdrop-blur-xl p-8 sm:p-12 rounded-2xl shadow-2xl text-center border border-white/20">
-        <h1 className="text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mb-4">Welcome, SSC Crackers!</h1>
-        <p className="text-xl md:text-2xl text-gray-700 mb-12">Ready to test your knowledge? Choose your adventure.</p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button onClick={() => { setQuizMode('mixed'); prepareQuizQuestions('mixed'); }} disabled={isLoading} className="bg-blue-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-blue-700 transform hover:-translate-y-1 transition-all duration-200 disabled:opacity-50">
-            <span className="text-xl">🎮 Mixed Quiz</span>
-            <span className="block text-sm font-normal opacity-90">25 Random Questions</span>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <div className="w-full max-w-4xl text-center">
+        <h1 className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-4">Welcome, SSC Crackers!</h1>
+        <p className="text-xl md:text-2xl text-gray-600 mb-12">Ready to test your knowledge? Choose your adventure.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+          {/* Card 1: Mixed Quiz */}
+          <button 
+            onClick={() => { setQuizMode('mixed'); prepareQuizQuestions('mixed'); }} 
+            disabled={isLoading} 
+            className="group bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 disabled:opacity-50 flex flex-col items-center border hover:border-blue-500"
+          >
+            <div className="mb-4 text-gray-400 group-hover:text-blue-500 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Mixed Quiz</h3>
+            <p className="text-gray-600">25 Random Questions</p>
           </button>
-          <button onClick={() => setQuizMode('topic')} disabled={isLoading} className="bg-purple-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-purple-700 transform hover:-translate-y-1 transition-all duration-200 disabled:opacity-50">
-            <span className="text-xl">📚 Practice by Topic</span>
-            <span className="block text-sm font-normal opacity-90">Choose Your Focus</span>
+          
+          {/* Card 2: Practice by Topic */}
+          <button 
+            onClick={() => setQuizMode('topic')} 
+            disabled={isLoading} 
+            className="group bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 disabled:opacity-50 flex flex-col items-center border hover:border-green-500"
+          >
+            <div className="mb-4 text-gray-400 group-hover:text-green-500 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Practice by Topic</h3>
+            <p className="text-gray-600">Choose Your Focus</p>
           </button>
-          <button onClick={() => setShowBookmarks(true)} disabled={isLoading || bookmarkedQuestions.length === 0} className="bg-gray-700 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-gray-800 transform hover:-translate-y-1 transition-all duration-200 disabled:opacity-50">
-            <span className="text-xl">🔖 My Bookmarks</span>
-            <span className="block text-sm font-normal opacity-90">{bookmarkedQuestions.length} Saved</span>
+
+          {/* Card 3: My Bookmarks */}
+          <button 
+            onClick={() => setShowBookmarks(true)} 
+            disabled={isLoading || bookmarkedQuestions.length === 0} 
+            className="group bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 disabled:opacity-50 flex flex-col items-center border hover:border-amber-500"
+          >
+            <div className="mb-4 text-gray-400 group-hover:text-amber-500 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">My Bookmarks</h3>
+            <p className="text-gray-600">{bookmarkedQuestions.length} Saved</p>
           </button>
         </div>
       </div>
@@ -126,12 +159,12 @@ const SubjectTopicSelection = React.memo(({ availableSubjects, availableTopics, 
                 <h3 className="text-xl font-semibold text-gray-700 mb-4">🔢 Select Number of Questions:</h3>
                 <div className="flex justify-center gap-2 flex-wrap">
                     {[5, 10, 15, 20, 'all'].map(num => (
-                        <button key={num} onClick={() => setTopicQuestionCount(num)} className={`py-2 px-5 rounded-full font-semibold transition-colors ${topicQuestionCount === num ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{num === 'all' ? 'All' : num}</button>
+                        <button key={num} onClick={() => setTopicQuestionCount(num)} className={`py-2 px-5 rounded-full font-semibold transition-colors ${topicQuestionCount === num ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{num === 'all' ? 'All' : num}</button>
                     ))}
                 </div>
             </div>
             <div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-4">🎯 Select a Topic in <span className="text-purple-600">{selectedSubject}</span>:</h3>
+                <h3 className="text-xl font-semibold text-gray-700 mb-4">🎯 Select a Topic in <span className="text-blue-600">{selectedSubject}</span>:</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {availableTopics[selectedSubject]?.map((topic, index) => {
                     const buttonColors = ['bg-emerald-500 hover:bg-emerald-600', 'bg-sky-500 hover:bg-sky-600', 'bg-violet-500 hover:bg-violet-600', 'bg-rose-500 hover:bg-rose-600', 'bg-amber-500 hover:bg-amber-600'];
@@ -158,11 +191,11 @@ const QuestionDisplay = React.memo(({ quizMode, level, countdown, currentQuestio
     const progressPercentage = ((currentQuestionIndex + 1) / filteredQuizData.length) * 100;
 
     return (
-      <div className="flex flex-col items-center justify-start min-h-screen bg-gray-50 p-4 sm:p-6">
+      <div className="flex flex-col items-center justify-start min-h-screen bg-gray-100 p-4 sm:p-6">
         <div className="relative bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-4xl">
           <div className="flex items-center justify-between mb-4 pb-4 border-b">
-            <button onClick={resetQuiz} className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-full hover:bg-gray-300 transition" aria-label="Return to home">🏠 Home</button>
-            {quizMode === 'mixed' && <span className="bg-purple-500 text-white text-md font-bold px-4 py-2 rounded-full">🎯 Level {level}</span>}
+            <button onClick={resetQuiz} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-full hover:bg-gray-300 transition" aria-label="Return to home">🏠 Home</button>
+            {quizMode === 'mixed' && <span className="bg-blue-500 text-white text-md font-bold px-4 py-2 rounded-full">🎯 Level {level}</span>}
             <div className={`flex items-center justify-center gap-2 px-4 py-2 rounded-full text-white font-bold text-lg ${getTimerColorClass(countdown)} transition-colors`}>⏱️ {countdown}s</div>
             <button onClick={() => toggleBookmark(currentQuestion)} className={`p-2 rounded-full transition-colors ${isBookmarked ? 'bg-yellow-400 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`} aria-label="Bookmark question">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
@@ -178,7 +211,7 @@ const QuestionDisplay = React.memo(({ quizMode, level, countdown, currentQuestio
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {currentQuestion.options.map((option, index) => (
                 <button key={index} onClick={() => !showFeedback && handleAnswer(option)} disabled={showFeedback} 
-                  className={`flex items-center py-3 px-5 rounded-lg text-left text-lg font-medium transition-all duration-200 disabled:cursor-not-allowed animate-fade-in-up ${showFeedback ? (option === currentQuestion.correct_answer ? 'bg-green-200 text-green-800 border-2 border-green-500' : (option === userAnswer ? 'bg-red-200 text-red-800 border-2 border-red-500' : 'bg-gray-100')) : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                  className={`flex items-center py-3 px-5 rounded-lg text-left text-lg font-medium transition-all duration-200 disabled:cursor-not-allowed animate-fade-in-up ${showFeedback ? (option === currentQuestion.correct_answer ? 'bg-green-100 text-green-800 border-2 border-green-500' : (option === userAnswer ? 'bg-red-100 text-red-800 border-2 border-red-500' : 'bg-gray-100')) : 'bg-gray-100 text-gray-800 hover:bg-blue-100'}`}
                   style={{ animationDelay: `${200 + index * 100}ms` }}
                 >
                   <span className="font-bold mr-3">{['A', 'B', 'C', 'D'][index]})</span> {option}
@@ -189,10 +222,10 @@ const QuestionDisplay = React.memo(({ quizMode, level, countdown, currentQuestio
 
           {showFeedback && (
             <div className="mt-6 p-5 rounded-lg bg-gray-50 border animate-fade-in">
-              <p className={`text-2xl font-semibold mb-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>{isCorrect ? 'Correct! 🎉' : "That's incorrect. �"}</p>
+              <p className={`text-2xl font-semibold mb-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>{isCorrect ? 'Correct! 🎉' : "That's incorrect.  "}</p>
               <p className="text-lg text-gray-800 mb-2">Correct Answer: <span className="font-bold text-green-700">{currentQuestion.correct_answer}</span></p>
               <p className="text-md text-gray-700"><span className="font-semibold">Explanation:</span> {currentQuestion.explanation}</p>
-              <button onClick={handleNextQuestion} className="mt-4 bg-purple-600 text-white font-bold py-2 px-8 rounded-full hover:bg-purple-700">Next</button>
+              <button onClick={handleNextQuestion} className="mt-4 bg-blue-500 text-white font-bold py-2 px-8 rounded-full hover:bg-blue-600">Next</button>
             </div>
           )}
           {!showFeedback && <button onClick={handleSkipQuestion} className="absolute bottom-5 right-5 bg-yellow-400 text-gray-800 font-semibold py-2 px-4 rounded-full shadow-lg hover:bg-yellow-500">Skip</button>}
@@ -224,11 +257,11 @@ const ResultsScreen = React.memo(({ quizMode, score, filteredQuizData, level, re
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-        <div className="bg-white p-10 rounded-xl shadow-2xl text-center w-full max-w-2xl">
+        <div className="bg-white p-10 rounded-xl shadow-2xl text-center w-full max-w-4xl">
           <h2 className="text-4xl font-extrabold text-gray-800 mb-4">Quiz Completed!</h2>
           <p className="text-5xl font-bold text-blue-600 mb-6">{score} / {filteredQuizData.length}</p>
           <p className="text-xl text-gray-600 mb-8">{getMotivatingMessage()}</p>
-          <div className="flex flex-wrap justify-center gap-4">
+          <div className="flex flex-wrap justify-center gap-4 mb-10">
             {quizMode === 'mixed' && passedMixedQuiz && level < MAX_LEVELS && (
               <button onClick={handleLevelProgression} className="bg-green-500 text-white font-bold py-3 px-6 rounded-full hover:bg-green-600 transition">
                 Proceed to Level {level + 1}
@@ -240,7 +273,7 @@ const ResultsScreen = React.memo(({ quizMode, score, filteredQuizData, level, re
               </button>
             )}
             {quizMode === 'topic' && (
-              <button onClick={() => prepareQuizQuestions('topic', selectedSubject, selectedTopic)} className="bg-purple-500 text-white font-bold py-3 px-6 rounded-full hover:bg-purple-600 transition">
+              <button onClick={() => prepareQuizQuestions('topic', selectedSubject, selectedTopic)} className="bg-blue-500 text-white font-bold py-3 px-6 rounded-full hover:bg-blue-600 transition">
                 Try More
               </button>
             )}
@@ -250,6 +283,28 @@ const ResultsScreen = React.memo(({ quizMode, score, filteredQuizData, level, re
                 Review Bookmarks ({bookmarkedQuestions.length})
               </button>
             )}
+          </div>
+
+          <div className="text-left mt-10 border-t pt-6">
+            <h3 className="text-2xl font-bold text-gray-800 mb-4">Review Your Answers</h3>
+            <div className="space-y-6">
+              {filteredQuizData.map((question, index) => (
+                <div key={index} className="p-4 border rounded-lg">
+                  <p className="font-semibold text-gray-800 mb-2">{index + 1}. {question.question}</p>
+                  <div className="space-y-1">
+                    {question.options.map((option, optIndex) => (
+                      <p 
+                        key={optIndex} 
+                        className={`p-2 rounded ${option === question.correct_answer ? 'bg-green-100 text-green-800 font-bold' : 'text-gray-700'}`}
+                      >
+                        {option}
+                      </p>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-sm text-gray-600"><span className="font-semibold">Explanation:</span> {question.explanation}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -273,9 +328,9 @@ const BookmarksViewer = React.memo(({ bookmarkedQuestions, setShowBookmarks, tog
                   </button>
               </div>
               <p className="text-md text-green-600 font-bold mb-2">Correct Answer: {item.correct_answer}</p>
-              <p className="text-md text-gray-600"><span className="font-semibold">Explanation:</span> {item.explanation}</p>
+              <p className="text-md text-gray-700"><span className="font-semibold">Explanation:</span> {item.explanation}</p>
             </div>
-          )) : <p className="text-center text-gray-500 py-8">You haven't bookmarked any questions yet.</p>}
+          )) : <p className="text-center text-gray-600 py-8">You haven't bookmarked any questions yet.</p>}
         </div>
       </div>
     </div>
@@ -438,7 +493,7 @@ const App = () => {
       questionsPool = quizData.filter(q => q.subject !== 'English');
       count = MIXED_QUIZ_QUESTION_COUNT;
     } else if (mode === 'topic' && subject && topic) {
-      setSelectedTopic(topic); // Keep track of the selected topic
+      setSelectedTopic(topic);
       questionsPool = quizData.filter(q => q.subject === subject && q.topic === topic);
       count = topicQuestionCount === 'all' ? questionsPool.length : topicQuestionCount;
     }
@@ -591,7 +646,6 @@ const App = () => {
             setSelectedSubject={setSelectedSubject}
             topicQuestionCount={topicQuestionCount}
             setTopicQuestionCount={setTopicQuestionCount}
-            setSelectedTopic={setSelectedTopic}
             prepareQuizQuestions={prepareQuizQuestions}
             resetQuiz={resetQuiz}
         />;
